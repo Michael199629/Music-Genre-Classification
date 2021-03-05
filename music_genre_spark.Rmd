@@ -1,0 +1,161 @@
+---
+title: "music_genres_spark"
+author: "Yi Yuan"
+date: "11/20/2020"
+output:
+  pdf_document:
+    fig_height: 3
+  html_document:
+    df_print: paged
+    code_folding: hide
+---
+
+## **Introduction**
+
+In music industry, we use genres to classify different types of music. With the development of Big Data and ML/AI, people want to know how we can make the machine learning to classify music genres. The purpose of this analysis is to preform exploratory data analysis on the GTZAN Dataset by using Spark. The ultimate goal of final project is to create a application which can automatically predict music genre.
+
+GTZAN Dataset provide us a csv files which contains features of audio file. In this dataset, we have 60 columns and 9990 rows. The authors extracted 57 features values from 1000 songs and make this data file.
+
+## **Analysis and results**
+
+I installed the spark into my local machine, and choose R as my analysis language. The first step is to connect Rstudio to Spark
+
+```{r, message=FALSE,echo=FALSE,warning=FALSE}
+#loading package
+library(sparklyr)
+library(dplyr)
+library(ggplot2)
+library(ggcorrplot)
+library(ggfortify)
+require(factoextra)
+require(magrittr)
+
+```
+
+```{r}
+#connect to Spark
+sc <- spark_connect(master = "local")
+#require(sparkxgb)
+```
+
+After we successfully connect to Spark, we can check the work status of Spark in a browser on port 4040 by default.
+
+!["Spark monitor."](C:\Users\Michael\Documents\ALY 6110\week 4\Spark_1.png)
+
+Then I load the data file from local file system by using `spark_read_csv`.
+
+```{r}
+#loading dataset into spark
+mg_tbl <- spark_read_csv(sc,
+                     name = "music_genres",
+                     path = "~/ALY 6110/final project/Music_genre/Data/features_3_sec.csv")
+```
+
+First, I need to check if there are imbalanced label in this data.
+
+```{r}
+bs <- mg_tbl %>% 
+  group_by(label) %>% 
+  summarize(count = n())
+print(bs)
+
+```
+
+From the results, we can see this data set which don't have any imbalance.
+
+Then I used histogram to check some features' distribution.Here I choose tempo and spectral_centroid_mean as the example.
+
+```{r}
+mg_tbl %>% 
+  select(tempo,label) %>% 
+  ggplot(aes(x = tempo,fill=label)) +
+  geom_density(alpha = 0.3) + 
+  ggtitle("Density plot of tempo")
+
+mg_tbl %>% 
+  select(spectral_centroid_mean,label) %>% 
+  ggplot(aes(x = spectral_centroid_mean,fill=label))+
+  geom_density(alpha = 0.3)+ 
+  ggtitle("Density plot of spectral_centroid_mean")
+```
+
+From the density plot of tempo, we can see the different genres have a similar tempo distribution. I mean the tempo of different genres are mostly concentrated between 100 and 150.
+
+Then I used `boxplot()` to see the difference in each feature for different genres. Here I take rms_mean and zero_crossing_rate_mean as examples.
+
+```{r}
+mg_tbl %>% 
+  select(rms_mean,label) %>% 
+  ggplot(aes(x = label, y = rms_mean, fill = label))+
+  geom_boxplot() +
+  ggtitle("Boxplot of rms_mean")
+
+mg_tbl %>% 
+  select(zero_crossing_rate_mean,label) %>% 
+  ggplot(aes(x = label, y = zero_crossing_rate_mean, fill = label))+
+  geom_boxplot() +
+  ggtitle("Boxplot of zero_crossing_rate_mean")
+```
+
+As for features selection, I will think if there is multicollinearity in this data. So I use correlation matrix to show the correlationship among these features.
+
+```{r,message=FALSE}
+mg_tbl %>% 
+  select(grep(pattern = "mean",colnames(mg_tbl),value = TRUE)) %>% 
+  ml_corr(method = "pearson") %>% 
+  ggcorrplot(type = "full",
+           outline.color = "white",
+           tl.cex = 6, tl.srt = 90) +
+  ggtitle("Correlation matrix for mean varuables")
+```
+
+From the correlation matrix, we do see there is a strong correlationship between some features.The deep blue means a strong negtive correlationship and the deep red color means indicated a strong positive correlationship.
+
+Finally, I also perform a PCA on this high dimension data set.
+
+```{r, warning = FALSE}
+
+mg_tbl %>% 
+  select(-filename,-length,-label) %>% 
+  collect() %>% 
+  prcomp(scale = TRUE) %>% 
+  autoplot(data = collect(mg_tbl),colour = 'label') +
+  ggtitle("PCA plot of genres")
+```
+
+From PCA plot, we can see how these music genres distribute in 2 dimension diagram.The result shows that there are indeed some difference between different music genres.
+
+```{r}
+#colnames(mg_tbl)
+#data.train.label <- as.numeric(data.train[,"label"])
+#data.train.label <- data.train.label - 1
+#data.test.label <- as.numeric(data.test[,"label"])-1
+
+#mg_tbl %>% select("chroma_stft_mean":"label") %>% 
+ # xgboost_classifier(formula = label ~., 
+#                     objective = "multi:softprob",
+#                     eval_metric = "mlogloss",
+#                     num_class = 10,
+#                     num_round = 200,
+#                     silent = 1,
+#                     seed = 2020,
+#                     num_early_stoppping_rounds = 10)
+```
+
+## **Insights**
+
+From the spectral_centroid_mean density plot, we can find that different music genres have its unique spectral_centroid which is a measure used in digital signal processing to characterise a spectrum. We can find the corresponding music genres through the spectral_centroid.
+
+We can find some insights from these `boxplots`. In the `boxplot` of zero_crossing_rate, we can see the different between classical and blues is small. However, in the `boxplot` of rms_mean, we can clearly see that the `boxplot` of classical music rms_mean is greatly differ from that of blues. So, can we use this difference to distinguish classical music and blues? In the final model, I may deal with this problem.
+
+Via the correlation matrix, we can find that chroma_stft_mean, ms_mean, spectral_centroid_mean, spectral_bandwidth_mean, rolloff_mean, zero_crossing_rate_mean and mfcc1_mean have most positive correlationship. Also, we can find that chroma_stft_mean, ms_mean, spectral_centroid_mean, spectral_bandwidth_mean, rolloff_mean, zero_crossing_rate_mean and mfcc1_mean have most negative correlationship. According to this finding, I will continue to deep analysis to find more relationships between these variables.
+
+Final, I used the PCA plot to identify the difference among music genres. Based on the visualization of the PCA plot, we can describe changes in different music genres and explain the impact of changes in original characteristics.
+
+## **Reference**
+
+Spectral centroid. (2019, October 04). Retrieved November 22, 2020, from https://en.wikipedia.org/wiki/Spectral_centroid
+
+Team, B. (2018, September 18). How to read PCA biplots and scree plots. Retrieved November 22, 2020, from https://bioturing.medium.com/how-to-read-pca-biplots-and-scree-plots-186246aae063
+
+Andradaolteanu. (2020, March 25). Work w/ Audio Data: Visualise, Classify, Recommend. Retrieved November 22, 2020, from https://www.kaggle.com/andradaolteanu/work-w-audio-data-visualise-classify-recommend

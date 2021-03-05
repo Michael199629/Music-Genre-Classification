@@ -1,0 +1,425 @@
+---
+title: "Music_genre"
+author: "Yi Yuan"
+date: "11/8/2020"
+output: pdf_document
+---
+```{r,warning=FALSE,message=FALSE}
+require(dplyr)
+require(readr)
+require(ggplot2)
+require(tuneR)
+require(signal)
+require(ggcorrplot)
+require(seewave)
+library(reticulate)
+fdir <- list.dirs(
+            path = paste(getwd(),"Data/genres_original","blues",sep = "/"))
+        fname <- list()
+        #for (i in 1:10) {
+            fname <- list.files(path = fdir)
+        #}
+        file1.dir <- paste(fdir,fname[1],sep = "/")
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+import librosa
+import matplotlib as plt
+import seaborn as sns
+from sklearn import preprocessing
+import librosa.display
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+
+```{python}
+path = "C:/Users/Michael/Documents/ALY 6110/final project/Music_genre/Data/genres_original/blues/blues.00000.wav"
+
+y, sr = librosa.load(path)
+
+print('y:', y, '\n')
+print('y shape:', np.shape(y), '\n')
+print('Sample Rate (KHz):', sr, '\n')
+
+```
+
+```{python}
+# Trim leading and trailing silence from an audio signal (silence before and after the actual audio)
+audio_file, _ = librosa.effects.trim(y)
+
+# the result is an numpy ndarray
+print('Audio File:', audio_file, '\n')
+print('Audio File shape:', np.shape(audio_file))
+```
+```{python}
+
+# Default FFT window size
+n_fft = 2048 # FFT window size
+hop_length = 512 # number audio of frames between STFT columns (looks like a good default)
+
+# Short-time Fourier transform (STFT)
+D = np.abs(librosa.stft(audio_file, n_fft = n_fft, hop_length = hop_length))
+
+print('Shape of D object:', np.shape(D))
+```
+```{python}
+DB = librosa.amplitude_to_db(D, ref = np.max)
+
+S = librosa.feature.melspectrogram(audio_file, sr=sr)
+S_DB = librosa.amplitude_to_db(S, ref=np.max)
+```
+
+```{python}
+print(S.shape)
+```
+
+```{python}
+zero_crossings = librosa.zero_crossings(audio_file, pad=False)
+print(sum(zero_crossings))
+```
+
+```{python}
+#y_harm, y_perc = librosa.effects.hpss(audio_file)
+y_harm, y_perc = librosa.effects.hpss(audio_file)
+y_harm.mean()
+y_harm.var()
+
+y_perc.mean()
+y_perc.var()
+tempo, _ = librosa.beat.beat_track(y, sr = sr)
+tempo
+```
+
+```{python}
+# Calculate the Spectral Centroids
+spectral_centroids = librosa.feature.spectral_centroid(audio_file, sr=sr)[0]
+
+# Shape is a vector
+print('Centroids:', spectral_centroids, '\n')
+print('Shape of Spectral Centroids:', spectral_centroids.shape, '\n')
+
+# Computing the time variable for visualization
+frames = range(len(spectral_centroids))
+
+# Converts frame counts to time (seconds)
+t = librosa.frames_to_time(frames)
+
+print('frames:', frames, '\n')
+print('t:', t)
+
+# Function that normalizes the Sound Data
+def normalize(x, axis=0):
+    return sklearn.preprocessing.minmax_scale(x, axis=axis)
+```
+```{python}
+spectral_rolloff = librosa.feature.spectral_rolloff(audio_file, sr=sr)[0]
+
+```
+
+```{python}
+mfccs = librosa.feature.mfcc(audio_file, sr=sr)
+print('mfccs shape:', mfccs.shape)
+
+```
+
+```{python}
+mfccs = preprocessing.scale(mfccs,axis = 1)
+print('Mean:', mfccs.mean(), '\n')
+print('Var:', mfccs.var())
+```
+```{python}
+hop_length = 5000
+# Chromogram
+chromagram = librosa.feature.chroma_stft(audio_file, sr=sr, hop_length=hop_length)
+print('Chromogram shape:', chromagram.shape)
+
+chroma_stft_mean = chromagram.mean()
+chroma_stft_var = chromagram.var()
+```
+
+```{python}
+def makeFeatures(audioFile):
+    # Make a default numpy array
+    tempNp = np.ones((1,55))
+    for i in range(len(df)):
+        x = np.asarray(df.iloc[i,:5000])
+        x = f2(x)
+        # Eliminate silence start and end
+        y, _ = librosa.effects.trim(x)
+        #zero_crossings_rates
+        zero_crossings = librosa.zero_crossings(y, pad=False)
+        zero_crossings_mean = zero_crossings.mean()
+        zero_crossings_var = zero_crossings.var()
+        #Harmonics and perceptrual
+        y_harm,y_perc = librosa.effects.hpss(y)
+        harm_mean = y_harm.mean()
+        harm_var = y_harm.var()
+        perc_mean = y_perc.mean()
+        perc_var = y_perc.var()
+        #rms
+        rms = librosa.feature.rms(y)
+        rms_mean = rms.mean()
+        rms_var = rms.var()
+        #tempo
+        tempo,_=librosa.beat.beat_track(y,sr=8000)
+        #Spectral_centroids
+        spectral_centroids = librosa.feature.spectral_centroid(y,sr=8000)[0]
+        spectral_centroids_mean = spectral_centroids.mean()
+        spectral_centroids_var = spectral_centroids.var()
+        #Spectral_rolloff
+        spectral_rolloff = librosa.feature.spectral_rolloff(y,sr=8000)[0]
+        spectral_rolloff_mean = spectral_rolloff.mean()
+        spectral_rolloff_var = spectral_rolloff.var()
+        #MFCCs
+        mfccs = librosa.feature.mfcc(y,sr=8000)
+        mfccs_mean = mfccs.mean(axis = 1)
+        mfccs_var = mfccs.var(axis = 1)
+        #chroma
+        chroma = librosa.feature.chroma_stft(y, sr=8000)
+        chroma_stft_mean = chroma.mean()
+        chroma_stft_var = chroma.var()
+        #Make a np array
+        temp = np.array([zero_crossings_mean,zero_crossings_var,\
+                         harm_mean,harm_var,perc_mean,perc_var,\
+                        rms_mean,rms_var,tempo,\
+                        spectral_centroids_mean,spectral_centroids_var,\
+                        spectral_rolloff_mean,spectral_rolloff_var,\
+                        chroma_stft_mean,chroma_stft_var])
+        temp = np.append(temp,mfccs_mean).flatten()
+        temp = np.append(temp,mfccs_var).flatten().reshape(1,-1)
+        tempNp = np.vstack((tempNp,temp)).reshape(-1,55)
+        #To track the processing 
+        #print('tempNp shape = ', tempNp.shape)
+    # Make a dataframe and delete the first row which is all ones.
+    newData = pd.DataFrame(tempNp[1:,:],columns = ['zero_crossings_mean','zero_crossings_var',\
+                                                   'harm_mean','harm_var','perc_mean','perc_var',\
+                                                   'rms_mean','rms_var',\
+                                                   'tempo','spectral_centroids_mean',\
+                                                   'spectral_centroids_var','spectral_rolloff_mean',\
+                                                   'spectral_rolloff_var','chroma_stft_mean',\
+                                                   'chroma_stft_var','mfcc1_mean','mfcc2_mean',\
+                                                   'mfcc3_mean','mfcc4_mean','mfcc5_mean',\
+                                                   'mfcc6_mean','mfcc7_mean','mfcc8_mean',\
+                                                   'mfcc9_mean','mfcc10_mean','mfcc11_mean',\
+                                                   'mfcc12_mean','mfcc13_mean','mfcc14_mean',\
+                                                   'mfcc15_mean','mfcc16_mean','mfcc17_mean',\
+                                                   'mfcc18_mean','mfcc19_mean','mfcc20_mean',\
+                                                   'mfcc1_var','mfcc2_var',\
+                                                   'mfcc3_var','mfcc4_var','mfcc5_var',\
+                                                   'mfcc6_var','mfcc7_var','mfcc8_var',\
+                                                   'mfcc9_var','mfcc10_var','mfcc11_var',\
+                                                   'mfcc12_var','mfcc13_var','mfcc14_var',\
+                                                   'mfcc15_var','mfcc16_var','mfcc17_var',\
+                                                   'mfcc18_var','mfcc19_var','mfcc20_var'])
+    return newData
+```
+
+```{python}
+
+```
+
+```{r}
+data <- readWave(file1.dir)
+
+#datastat <- acoustat(data)
+#filemfcc_mean <- mean(datastat[,1])
+
+#sw <- meanspec(data,plot = FALSE)
+
+#swp <- specprop(sw,str = TRUE)
+
+#blue001 <- melfcc(data,sr = data@samp.rate,
+#                  numcep = 20,fbtype = "mel")
+#blue000_zcr <- zcr(data)
+snd <- data@left - mean(data@left)
+
+#plot(snd, type = 'l', xlab = 'Samples', ylab = 'Amplitude')
+# create spectrogram
+spec <- signal::specgram(x = snd, n = 1024, Fs = data@samp.rate, overlap = 1024 * 0.75)
+
+# normalize and rescale to dB
+P <- abs(spec$S)
+P <- P/max(P)
+
+out <- pmax(1e-6, P)
+dim(out) <- dim(P)
+out <- log10(out) / log10(1e-6)
+
+# plot spectrogram
+image(x = spec$t, y = spec$f, z = t(out), ylab = 'Freq [Hz]', xlab = 'Time [s]', useRaster=TRUE)
+```
+
+```{r}
+require(rgl)
+spectro3D(data)
+```
+
+
+```{r}
+mydata <- read.csv("Data/features_3_sec.csv")
+table(is.na(mydata))
+nrow(mydata)
+```
+
+```{r}
+X <- mydata[,2:59]
+y <- mydata[,60]
+ggplot(data = mydata, aes(x = label, y = spectral_centroid_mean, fill = label)) +
+  geom_boxplot() +
+  ggtitle("Spectral_centroid_mean boxplot for genres")+
+  xlab("Music Genres")
+
+ggplot(data = mydata, aes(x = label, y = tempo, fill = label)) +
+  geom_boxplot() +
+  ggtitle("BPM boxplot for genres")+
+  xlab("Music Genres")
+```
+
+```{r}
+pattern <- "mean"
+pattern.var <- "var"
+cor.var <- X[grep(pattern.var,colnames(X))]
+cor.mean <- X[,grep(pattern,colnames(X))]
+corM.mean <- cor(cor.mean)
+corM.var <- cor(cor.var)
+ggcorrplot(corM.mean,type = "full",
+           outline.color = "white",
+           tl.cex = 6, tl.srt = 90) +
+  ggtitle("Correlation heatmap for the mean variables")
+
+ggcorrplot(corM.var,type = "full",
+           outline.color = "white",
+           tl.cex = 6, tl.srt = 90) +
+  ggtitle("Correlation heatmap for the var variables")
+```
+```{r}
+require(factoextra)
+
+res.pca <- prcomp(X[,2:58],scale = TRUE)
+fviz_eig(res.pca)
+
+```
+
+```{r}
+require(ggfortify)
+pca.plot <- autoplot(res.pca,data = mydata,colour = 'label')
+pca.plot 
+```
+```{r}
+require(xgboost)
+require(magrittr)
+require(vtreat)
+set.seed(2020)
+
+
+rows <- sample(1:nrow(mydata),nrow(mydata))
+newdata <- mydata[rows,]
+ind <- sample(2,nrow(newdata),replace = T,prob = c(0.7,0.3))
+
+data.train <- newdata[ind == 1,3:60] 
+data.test <- newdata[ind == 2,3:60]
+
+feature <- setdiff(names(data.train),"label")
+data.train.label <- as.numeric(data.train[,"label"])
+data.train.label <- data.train.label - 1
+
+data.test.label <- as.numeric(data.test[,"label"])-1
+
+
+```
+
+
+```{r}
+xgb_params <- list(
+  "objective" = "multi:softprob",
+  "eval_metric" = "mlogloss",
+  "num_class" = 10
+)
+model <- xgb.cv(
+  params = xgb_params,
+  data = as.matrix(data.train[,-58]),
+  label = as.matrix(data.train.label),
+  nrounds = 1000,
+  nfold = 5,
+  verbose = FALSE
+)
+```
+
+```{r}
+model$evaluation_log %>% 
+  ggplot() +
+  geom_line(aes(iter,train_mlogloss_mean),color = "blue") +
+  geom_line(aes(iter,test_mlogloss_mean),color = "red")
+```
+
+```{r}
+model2 <- xgb.cv(
+  params = xgb_params,
+  data = as.matrix(data.train[,-58]),
+  label = as.matrix(data.train.label),
+  nrounds = 1000,
+  nfold = 5,
+  verbose = 0,
+  early_stopping_rounds = 10
+)
+```
+
+```{r}
+model2$evaluation_log %>% 
+  ggplot() +
+  geom_line(aes(iter,train_mlogloss_mean),color = "blue") +
+  geom_line(aes(iter,test_mlogloss_mean),color = "red")
+```
+
+```{r}
+final_model <- xgboost(
+  params = xgb_params,
+  data = as.matrix(data.train[,-58]),
+  label = as.matrix(data.train.label),
+  nrounds = 175,
+  verbose = 0
+)
+
+importance_matrix <- xgb.importance(model = final_model)
+
+xgb.plot.importance(importance_matrix, top_n = 10, measure = "Gain")
+```
+
+```{r}
+pred <- predict(final_model,as.matrix(data.test[,-58]))
+dim(pred)
+mydata.label <- as.numeric(data.test[,"label"])-1
+prediction <- matrix(pred,nrow = 10,
+                     ncol = length(pred)/10) %>% 
+  t() %>% 
+  data.frame() %>% 
+  mutate(label = mydata.label +1,
+         max_prob = max.col(.,"last"))
+#prediction
+table(prediction$label,prediction$max_prob)
+mean(prediction$label == prediction$max_prob)
+```
+
+
+```{r}
+data2 <- read.csv("Data/features_30_sec.csv")
+
+pred <- predict(final_model,as.matrix(data2[,3:59]))
+dim(pred)
+data2.label <- as.numeric(data2[,"label"])-1
+prediction <- matrix(pred,nrow = 10,
+                     ncol = length(pred)/10) %>% 
+  t() %>% 
+  data.frame() %>% 
+  mutate(filename = data2[,1],
+         label = data2.label +1,
+         max_prob = max.col(.,"last"))
+#prediction
+table(prediction$label,prediction$max_prob)
+mean(prediction$label == prediction$max_prob)
+```
+
+
